@@ -1,0 +1,125 @@
+
+function analysis_vlc(file)
+close all;
+clc;
+%% read in image file 
+figure;
+I= imread(file);
+subplot(2,3,1) ;  imshow(I);title('Original image');
+
+%change to gray scale
+I = rgb2gray(I);
+subplot(2,3,2) ; imshow(I); title('grayscale picture');
+
+%% get the pixels of image
+[rows columns numberOfColorChannels] = size(I);
+
+%% crop the message part
+sumOfcolumns = sum(I);
+sumOfrows = sum(I,2);sumOfrows = sumOfrows';
+meansOfcolumns = (sum(sumOfcolumns))/columns;
+meansOfrows = (sum(sumOfrows))/rows;
+
+i=1;
+while (sumOfcolumns(i)<=meansOfcolumns)
+i=i+1;
+end
+startcolumns = i;
+i=columns;
+while(sumOfcolumns(i)<=meansOfcolumns)
+    i=i-1;
+end
+endcolumns = i;
+
+i=1;
+while(sumOfrows(i)<=meansOfrows)
+    i=i+1;
+end
+startrows=i;
+i=rows;
+while(sumOfrows(i)<=meansOfrows)
+    i=i-1;
+end
+endrows=i;
+
+I = I(startrows:endrows,startcolumns:endcolumns);
+subplot(2,3,3);imshow(I);title('Cropped image');
+columns = endcolumns-startcolumns;
+rows = endrows-startrows;
+
+%% OTSU filter
+level = graythresh(I);
+BW = im2bw(I,level);
+subplot(2,3,4);imshow(BW);
+
+%% sum the pixels of each columns in this area
+sumOfPixel2 = [];
+for i = 1:columns
+	sumOfPixel2 = [sumOfPixel2 sum(BW(1:rows,i))];
+end
+subplot(2,3,5);plot(sumOfPixel2);title('sum of pixels');
+xlim([0,columns]);
+
+%% threshold for high power duration
+middle2 = [];
+middle2 = max(sumOfPixel2)/2;
+
+%% binarization
+decode = (sumOfPixel2 > middle2);
+subplot(2,3,6);plot(decode);
+
+%% ignore the first bits and last bits
+i = 2;
+while decode(i)==decode(1)
+    i=i+1;
+end
+startbit = i;
+i = columns-1;
+while decode(i) == decode(columns)
+    i=i-1;
+end
+endbit = i;
+subplot(2,3,6);ylim([-0.5,1.5]);xlim([startbit,endbit]);
+
+%% find the minimum length of consecutive 1 or 0 
+min = 1000;recorda = 0;recordb = 0;
+state = 0;twobit = [];
+
+for i = startbit : endbit-1
+    if decode(i) ~= decode(i-1) && state == 0
+        recorda = i;
+        state = 1;
+    end
+    if decode(i) ~= decode(i+1) && state == 1
+        state = 2;
+        i =i+1;
+    end
+    if decode(i) ~= decode(i+1) && state ==2
+        recordb = i;
+        twobit = recordb-recorda;
+        if twobit < min
+            min = twobit;
+        end
+        state = 0;
+        i = i+1;
+    end
+end
+avgdistance = round(min/2);
+
+%% decode and final code is in data array
+data = [];
+for i = startbit+round(avgdistance/2) :avgdistance:endbit;
+
+   data = [data decode(i)]
+       
+end
+
+%% find match code
+message = [];
+for i=1:length(data);
+    if data(i:i+11) == [ 1 1 1 1 1 1 1 1 0 1 0 1];
+        message =[data(i+12) data(i+13) data(i+14) data(i+15)];
+    end
+end
+message
+    

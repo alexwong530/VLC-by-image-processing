@@ -1,0 +1,135 @@
+figure;
+I= imread(file);
+
+subplot(2,3,1) ;  imshow(I);title('Original image');
+%%preprocessingI
+%%======================================================================
+%change to gray scale
+I = rgb2gray(I);
+
+subplot(2,3,2) ; imshow(I); title('grayscale picture');
+
+%% get the pixels of image
+[rows columns numberOfColorChannels] = size(I);
+
+%% crop the message part
+sumOfcolumns = sum(I);
+sumOfrows = sum(I,2);sumOfrows = sumOfrows';
+meansOfcolumns = (sum(sumOfcolumns))/columns;
+meansOfrows = (sum(sumOfrows))/rows;
+
+i=1;
+while (sumOfcolumns(i)<=meansOfcolumns)
+i=i+1;
+end
+startcolumns = i;
+i=columns;
+while(sumOfcolumns(i)<=meansOfcolumns)
+    i=i-1;
+end
+endcolumns = i;
+
+i=1;
+while(sumOfrows(i)<=meansOfrows)
+    i=i+1;
+end
+startrows=i;
+i=rows;
+while(sumOfrows(i)<=meansOfrows)
+    i=i-1;
+end
+endrows=i;
+
+I = I(startrows:endrows,startcolumns:endcolumns);
+subplot(2,3,3);imshow(I);title('Cropped image');
+columns = endcolumns-startcolumns;
+rows = endrows-startrows;
+
+%% OTSU filter
+level = graythresh(I);
+BW = im2bw(I,level);
+subplot(2,3,4);imshow(BW);
+
+%% sum the pixels of each columns in this area
+sumOfPixel2 = [];
+for i = 1:columns
+	sumOfPixel2 = [sumOfPixel2 sum(BW(1:rows,i))];
+end
+subplot(2,3,5);plot(sumOfPixel2);title('sum of pixels');
+xlim([0,columns]);
+
+%% find the threshold
+middle2 = [];
+d = columns/4;
+d = round(d);
+for i = 1:d/2+1;
+    middle2 = [middle2 mean(sumOfPixel2(1:i+d/2))];
+end
+for i = d/2+1:columns-d/2-1;
+    middle2 = [middle2 mean(sumOfPixel2(i-d/2:i+d/2))];
+end
+for i = columns-d/2:columns;
+    middle2 = [middle2 mean(sumOfPixel2(i-d/2:columns))];
+end
+
+if length(middle2)<length(sumOfPixel2)
+    middle2 = [middle2 middle2(end)];
+elseif length(sumOfPixel2)<length(middle2)
+     sumOfPixel2 = [sumOfPixel2 sumOfPixel2(end)];
+end
+subplot(2,3,5);    
+hold on 
+plot (middle2,'r');
+hold off
+
+%% binarization
+decode = (sumOfPixel2 > middle2);
+subplot(2,3,6);plot(decode);
+
+%% ignore the first bits and last bits
+i = round(length(decode)/5)+1;
+while decode(i)==decode(round(length(decode)/5))
+    i=i+1;
+end
+startbit = i;
+i = round(4*length(decode)/5)-1;
+while decode(i) == decode(round(4*length(decode)/5))
+    i=i-1;
+end
+endbit = i;
+subplot(2,3,6);ylim([-0.5,1.5]);xlim([startbit,endbit]);
+
+%% find the minimum length of consecutive 1 or 0 
+min = 1000;recorda = 0;recordb = 0;
+state = 0;twobit = [];
+
+for i = startbit : endbit-1
+    if decode(i) ~= decode(i-1) && state == 0
+        recorda = i;
+        state = 1;
+    end
+    if decode(i) ~= decode(i+1) && state == 1
+        state = 2;
+        i =i+1;
+    end
+    if decode(i) ~= decode(i+1) && state ==2
+        recordb = i;
+        twobit = recordb-recorda;
+        if twobit < min
+            min = twobit;
+        end
+        state = 0;
+        i = i+1;
+    end
+end
+avgdistance = round(min/2);
+
+%% decode and final code is in data array
+data = [];
+for i = startbit :8*avgdistance : endbit
+   while decode(i) == decode(i-1)
+       i=i+1;
+   end
+   data = [data decode(i+round(avgdistance/2)) decode(i+round(3*avgdistance/2)) decode(i+round(5*avgdistance/2)) decode(i+round(7*avgdistance/2)) decode(i+round(9*avgdistance/2)) decode(i+round(11*avgdistance/2)) decode(i+round(13*avgdistance/2)) decode(i+round(15*avgdistance/2))];
+   
+end
